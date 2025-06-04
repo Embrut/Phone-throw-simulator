@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Throw Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                    }
+                }
+            },
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        .item-locked {
+            filter: grayscale(100%) brightness(40%);
+            opacity: 0.7;
+        }
+        
+        @keyframes throwAnimation {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-150px) rotate(180deg); }
+            100% { transform: translateY(0) rotate(360deg); }
+        }
+        
+        .animate-throw {
+            animation: throwAnimation 1s ease-in-out;
+        }
+
+        #trajectoryCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes progress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .progress-animate {
+            animation: progress 3s ease-in-out;
+        }
+        
+        .modal-backdrop {
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen flex flex-col">
+    <div class="flex-1 flex flex-col max-w-md mx-auto w-full p-4">
+        <!-- Header -->
+        <header class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-primary mb-2">Phone Throw Simulator</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Measure how far your phone would go without actually throwing it</p>
+        </header>
+
+        <!-- Main display area -->
+        <div class="flex-1 flex flex-col items-center justify-center relative mb-6">
+            <!-- Object display -->
+            <div id="phoneContainer" class="relative mb-4">
+                <div id="objectDisplay" class="text-6xl mb-2 transition-all duration-300 transform">📱</div>
+                <div id="objectName" class="text-center font-semibold">Phone</div>
+            </div>
+
+            <!-- Trajectory canvas -->
+            <canvas id="trajectoryCanvas"></canvas>
+
+            <!-- Distance display -->
+            <div class="text-center my-4">
+                <div class="text-4xl font-bold text-primary transition-all" id="distanceDisplay">0</div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">feet</div>
+            </div>
+
+            <!-- Total distance display -->
+            <div class="text-center mb-4">
+                <div class="text-sm text-gray-600 dark:text-gray-400">Total Distance</div>
+                <div class="text-2xl font-bold" id="totalDistanceDisplay">0 ft</div>
+            </div>
+
+            <!-- Atmosphere info -->
+            <div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 text-sm w-full mb-4">
+                <div class="flex justify-between items-center">
+                    <span>Atmosphere:</span>
+                    <span id="atmosphereDisplay">Normal (1 atm)</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Air Resistance:</span>
+                    <span id="dragDisplay">Medium</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unlocks section -->
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold mb-2">Unlockable Items</h2>
+            <div class="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
+                <div class="unlock-item" data-distance="0">
+                    <div class="text-2xl mb-1">📱</div>
+                    <div>Phone</div>
+                    <div class="text-xs text-primary">0 ft</div>
+                </div>
+                <div class="unlock-item item-locked" data-distance="1000">
+                    <div class="text-2xl mb-1">🪨</div>
+                    <div>Rock</div>
+                    <div class="text-xs text-primary">1,000 ft</div>
+                </div>
+                <div class="unlock-item item-locked" data-distance="5000">
+                    <div class="text-2xl mb-1">🪓</div>
+                    <div>Axe</div>
+                    <div class="text-xs text-primary">5,000 ft</div>
+                </div>
+                <div class="unlock-item item-locked" data-distance="7000">
+                    <div class="text-2xl mb-1">🍍</div>
+                    <div>Pineapple</div>
+                    <div class="text-xs text-primary">7,000 ft</div>
+                </div>
+                <div class="unlock-item item-locked" data-distance="10000">
+                    <div class="text-2xl mb-1">👶</div>
+                    <div>Baby</div>
+                    <div class="text-xs text-primary">10,000 ft</div>
+                </div>
+                <div class="unlock-item item-locked" data-distance="20000">
+                    <div class="text-2xl mb-1">👤</div>
+                    <div>Human Head</div>
+                    <div class="text-xs text-primary">20,000 ft</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mt-auto">
+            <button id="throwButton" class="bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-full w-full text-lg mb-4 transition-all active:scale-95">
+                THROW!
+            </button>
+            <div class="text-xs text-center text-gray-500 dark:text-gray-400 mb-6">
+                Hold your phone and make a throwing motion to simulate the throw
+            </div>
+            
+            <!-- Donation Section -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                <div class="text-center mb-2">
+                    <div class="text-sm font-medium mb-1">Support This App</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Created by an indie developer (currently job-seeking)</div>
+                </div>
+                <div class="flex justify-center gap-2">
+                    <a href="https://paypal.me/Thisismeiamshe" target="_blank" rel="noopener" class="bg-[#0070BA] hover:bg-[#0070BA]/90 text-white py-2 px-3 rounded-lg text-sm font-medium flex items-center transition-all active:scale-95">
+                        <svg class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.067 8.478c.492.88.556 2.014.3 3.327-1.084 5.54-5.738 8.141-11.586 8.141H6.826a.753.753 0 0 0-.748.648l-.57 3.671a.752.752 0 0 1-.747.648H2.953a.5.5 0 0 1-.497-.571l3.054-19.513a.75.75 0 0 1 .744-.648h9.782c2.552 0 4.044 1.108 4.531 2.297Z" />
+                            <path d="M6.247 8.895h5.43c2.758 0 3.92 1.088 3.598 3.803-.437 3.685-2.4 5.335-5.775 5.335H7.398c-.405 0-.67.33-.781.73l-.667 4.334H3.197L5.446 9.626a.75.75 0 0 1 .8-.73Z" fill="#FFF" />
+                        </svg>
+                        PayPal ($0.99)
+                    </a>
+                    <a href="https://ko-fi.com/embrut" target="_blank" rel="noopener" class="bg-[#FF5E5B] hover:bg-[#FF5E5B]/90 text-white py-2 px-3 rounded-lg text-sm font-medium flex items-center transition-all active:scale-95">
+                        <span class="mr-1">☕</span> Buy me a coffee
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Permission Modal -->
+    <div id="permissionModal" class="hidden fixed inset-0 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full">
+            <h3 class="text-xl font-bold mb-3">Motion Sensor Access</h3>
+            <p class="mb-4">This app needs permission to access your device's motion sensors to simulate throwing your phone.</p>
+            
+            <div class="space-y-2 mb-6">
+                <div class="flex items-start">
+                    <div class="shrink-0 text-primary text-xl mr-2">1</div>
+                    <p class="text-sm">When you click "Allow", you'll see a browser permission dialog.</p>
+                </div>
+                <div class="flex items-start">
+                    <div class="shrink-0 text-primary text-xl mr-2">2</div>
+                    <p class="text-sm">Select "Allow" in that dialog to enable motion sensors.</p>
+                </div>
+                <div class="flex items-start">
+                    <div class="shrink-0 text-primary text-xl mr-2">3</div>
+                    <p class="text-sm">Then hold your phone and make a throwing motion (don't actually throw it!).</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                <button id="allowPermissionBtn" class="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg flex-1 text-center">
+                    Allow Sensors
+                </button>
+                <button id="useDemoModeBtn" class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 font-bold py-3 px-4 rounded-lg flex-1 text-center">
+                    Use Demo Mode
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check for dark mode
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Main app logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const throwButton = document.getElementById('throwButton');
+            const distanceDisplay = document.getElementById('distanceDisplay');
+            const totalDistanceDisplay = document.getElementById('totalDistanceDisplay');
+            const objectDisplay = document.getElementById('objectDisplay');
+            const objectName = document.getElementById('objectName');
+            const phoneContainer = document.getElementById('phoneContainer');
+            const atmosphereDisplay = document.getElementById('atmosphereDisplay');
+            const dragDisplay = document.getElementById('dragDisplay');
+            const unlockItems = document.querySelectorAll('.unlock-item');
+            const trajectoryCanvas = document.getElementById('trajectoryCanvas');
+            const ctx = trajectoryCanvas.getContext('2d');
+
+            // Set canvas dimensions
+            function setupCanvas() {
+                trajectoryCanvas.width = window.innerWidth;
+                trajectoryCanvas.height = window.innerHeight;
+            }
+            setupCanvas();
+            window.addEventListener('resize', setupCanvas);
+
+            // State variables
+            let totalDistance = 0;
+            let isThrowEnabled = true;
+            let isThrowInProgress = false;
+            let acceleration = { x: 0, y: 0, z: 0 };
+            let velocity = { x: 0, y: 0, z: 0 };
+            let lastReadingTime = null;
+            let sensorInterval = null;
+            let throwVelocity = 0;
+            let demoMode = false; // Set to true when motion sensors are unavailable or permission denied
+            let currentItem = {
+                emoji: '📱',
+                name: 'Phone',
+                distance: 0
+            };
+
+            // Items data
+            const items = [
+                { emoji: '📱', name: 'Phone', distance: 0 },
+                { emoji: '🪨', name: 'Rock', distance: 1000 },
+                { emoji: '🪓', name: 'Axe', distance: 5000 },
+                { emoji: '🍍', name: 'Pineapple', distance: 7000 },
+                { emoji: '👶', name: 'Baby', distance: 10000 },
+                { emoji: '👤', name: 'Human Head', distance: 20000 }
+            ];
+
+            // Physics constants
+            const g = 9.81; // m/s^2, acceleration due to gravity
+            let airDensity = 1.225; // kg/m^3, at sea level
+            let dragCoefficient = 0.5; // medium drag
+
+            // Randomly vary atmospheric conditions
+            function updateAtmosphericConditions() {
+                // Random atmospheric pressure between 0.8 and 1.2 atm
+                const pressure = 0.8 + Math.random() * 0.4;
+                airDensity = 1.225 * pressure;
+                
+                // Display atmospheric info
+                let atmosphereText = "Normal (1 atm)";
+                if (pressure < 0.9) atmosphereText = "Thin (0.8 atm)";
+                else if (pressure > 1.1) atmosphereText = "Dense (1.2 atm)";
+                atmosphereDisplay.textContent = atmosphereText;
+                
+                // Random drag coefficient between 0.3 and 0.7
+                dragCoefficient = 0.3 + Math.random() * 0.4;
+                
+                // Display drag info
+                let dragText = "Medium";
+                if (dragCoefficient < 0.4) dragText = "Low";
+                else if (dragCoefficient > 0.6) dragText = "High";
+                dragDisplay.textContent = dragText;
+            }
+            
+            // Update atmospheric conditions initially
+            updateAtmosphericConditions();
+
+            // Check if device has motion sensors
+            function checkMotionSensors() {
+                if (window.DeviceMotionEvent) {
+                    return true;
+                } else {
+                    throwButton.textContent = "Sensors Not Available";
+                    throwButton.disabled = true;
+                    return false;
+                }
+            }
+
+            // Permission and instructions modal
+            function showPermissionModal(show = true) {
+                const modal = document.getElementById('permissionModal');
+                if (show) {
+                    modal.classList.remove('hidden');
+                } else {
+                    modal.classList.add('hidden');
+                }
+            }
+            
+            // Handle permission for device motion
+            function requestMotionPermission() {
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS 13+ requires permission
+                    throwButton.textContent = "Requesting Permission...";
+                    
+                    // Show instructions before requesting permission
+                    showPermissionModal(true);
+                    
+                    // The actual permission request is triggered by the Allow button
+                    document.getElementById('allowPermissionBtn').onclick = () => {
+                        showPermissionModal(false);
+                        
+                        DeviceMotionEvent.requestPermission()
+                            .then(permissionState => {
+                                if (permissionState === 'granted') {
+                                    startThrow();
+                                } else {
+                                    throwButton.textContent = "Permission Denied";
+                                    setTimeout(() => {
+                                        throwButton.textContent = "TRY AGAIN";
+                                        isThrowEnabled = true;
+                                    }, 2000);
+                                }
+                            })
+                            .catch(error => {
+                                console.error("Permission error:", error);
+                                throwButton.textContent = "Error: " + (error.message || "Permission denied");
+                                setTimeout(() => {
+                                    throwButton.textContent = "TRY AGAIN";
+                                    isThrowEnabled = true;
+                                }, 2000);
+                            });
+                    };
+                    
+                    // If they click "Use Demo Mode" instead
+                    document.getElementById('useDemoModeBtn').onclick = () => {
+                        showPermissionModal(false);
+                        // Enable demo mode - simulate throws without sensors
+                        demoMode = true;
+                        startThrow();
+                    };
+                    
+                } else {
+                    // Non-iOS or older iOS versions
+                    startThrow();
+                }
+            }
+
+            // Convert acceleration to velocity
+            function updateVelocity(event) {
+                if (!isThrowInProgress) return;
+
+                const now = Date.now();
+                if (!lastReadingTime) {
+                    lastReadingTime = now;
+                    return;
+                }
+
+                const dt = (now - lastReadingTime) / 1000; // time in seconds
+                lastReadingTime = now;
+
+                // Get acceleration data
+                acceleration.x = event.accelerationIncludingGravity?.x || 0;
+                acceleration.y = event.accelerationIncludingGravity?.y || 0;
+                acceleration.z = event.accelerationIncludingGravity?.z || 0;
+
+                // Update velocity based on acceleration
+                velocity.x += acceleration.x * dt;
+                velocity.y += acceleration.y * dt;
+                velocity.z += acceleration.z * dt;
+
+                // Calculate magnitude of velocity
+                const speedSquared = velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
+                throwVelocity = Math.sqrt(speedSquared);
+
+                // Detect throw (rapid acceleration followed by sudden drop)
+                if (throwVelocity > 15 && velocity.z < -5) {
+                    completeThrow();
+                }
+            }
+
+            // Calculate throw distance based on physics
+            function calculateThrowDistance(v0) {
+                // Convert to m/s if needed (simplified)
+                const initialVelocity = v0 * 0.5; // Scaling factor for better gameplay
+                
+                // For a 45-degree throw (optimal angle for distance)
+                const angle = 45 * Math.PI / 180;
+                const vx = initialVelocity * Math.cos(angle);
+                const vy = initialVelocity * Math.sin(angle);
+                
+                // Object properties
+                const mass = 0.2; // kg, approximate mass of a phone
+                const area = 0.015; // m^2, approximate frontal area of object
+                
+                // Numerical simulation of trajectory with air resistance
+                let x = 0;
+                let y = 0;
+                let t = 0;
+                let currentVx = vx;
+                let currentVy = vy;
+                const dt = 0.01; // small time step for accuracy
+                
+                while (y >= 0) {
+                    // Calculate drag force
+                    const v = Math.sqrt(currentVx * currentVx + currentVy * currentVy);
+                    const dragForce = 0.5 * airDensity * v * v * dragCoefficient * area;
+                    
+                    // Update velocities with drag
+                    const ax = -dragForce * currentVx / (mass * v) / 10; // Dividing by 10 to make game more fun
+                    const ay = -g - dragForce * currentVy / (mass * v) / 10;
+                    
+                    currentVx += ax * dt;
+                    currentVy += ay * dt;
+                    
+                    x += currentVx * dt;
+                    y += currentVy * dt;
+                    t += dt;
+                    
+                    // Avoid infinite loops
+                    if (t > 100) break;
+                }
+                
+                // Convert to feet (1 meter = 3.28084 feet)
+                return x * 3.28084;
+            }
+
+            // Simulate a throw with random velocity for demo purposes
+            function simulateThrow() {
+                // Generate a random velocity between 5 and 30
+                throwVelocity = 5 + Math.random() * 25;
+                completeThrow();
+            }
+
+            // Animate trajectory on canvas
+            function animateTrajectory(distance) {
+                const canvasWidth = trajectoryCanvas.width;
+                const canvasHeight = trajectoryCanvas.height;
+                
+                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                
+                // Starting point
+                const startX = 50;
+                const startY = canvasHeight - 100;
+                
+                // Scale distance to fit canvas
+                const scaleFactor = Math.min(0.8, 0.8 * canvasWidth / distance);
+                const endX = startX + distance * scaleFactor;
+                
+                // Draw arc trajectory
+                ctx.beginPath();
+                ctx.strokeStyle = document.documentElement.classList.contains('dark') ? '#8583F4' : '#5D5CDE';
+                ctx.lineWidth = 3;
+                
+                // Draw an arc representing the trajectory
+                ctx.moveTo(startX, startY);
+                
+                // Control points for quadratic curve
+                const peakX = startX + (endX - startX) / 2;
+                const peakY = startY - canvasHeight * 0.3; // How high the peak goes
+                
+                ctx.quadraticCurveTo(peakX, peakY, endX, startY);
+                ctx.stroke();
+                
+                // Draw the item at the end of the trajectory
+                ctx.font = '24px Arial';
+                ctx.fillText(currentItem.emoji, endX - 12, startY - 10);
+            }
+
+            // Complete throw calculation
+            function completeThrow() {
+                if (!isThrowInProgress) return;
+                
+                isThrowInProgress = false;
+                clearInterval(sensorInterval);
+                window.removeEventListener('devicemotion', updateVelocity);
+                
+                // Calculate final throw distance
+                const rawDistance = calculateThrowDistance(throwVelocity);
+                const distance = Math.floor(rawDistance);
+
+                // Animation of distance counting up
+                let displayedDistance = 0;
+                const increment = Math.max(1, Math.floor(distance / 100));
+                const distanceInterval = setInterval(() => {
+                    displayedDistance += increment;
+                    if (displayedDistance >= distance) {
+                        displayedDistance = distance;
+                        clearInterval(distanceInterval);
+                        
+                        // Add to total distance (cumulative system)
+                        totalDistance += distance;
+                        totalDistanceDisplay.textContent = `${totalDistance.toLocaleString()} ft`;
+                        checkUnlocks();
+                        
+                        throwButton.textContent = "THROW AGAIN!";
+                        isThrowEnabled = true;
+                    }
+                    distanceDisplay.textContent = displayedDistance.toLocaleString();
+                }, 10);
+                
+                // Animate the trajectory
+                animateTrajectory(distance);
+                
+                // Play throw animation
+                phoneContainer.classList.add('animate-throw');
+                setTimeout(() => {
+                    phoneContainer.classList.remove('animate-throw');
+                }, 1000);
+            }
+
+            // Check for item unlocks based on total distance
+            function checkUnlocks() {
+                unlockItems.forEach(item => {
+                    const unlockDistance = parseInt(item.getAttribute('data-distance'));
+                    if (totalDistance >= unlockDistance) {
+                        item.classList.remove('item-locked');
+                    }
+                });
+                
+                // Find highest unlocked item
+                let highestUnlockedItem = items[0];
+                for (const item of items) {
+                    if (totalDistance >= item.distance) {
+                        highestUnlockedItem = item;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Update current item display
+                currentItem = highestUnlockedItem;
+                objectDisplay.textContent = currentItem.emoji;
+                objectName.textContent = currentItem.name;
+            }
+
+            // Start the throw
+            function startThrow() {
+                if (!isThrowEnabled) return;
+                
+                isThrowEnabled = false;
+                isThrowInProgress = true;
+                throwButton.textContent = "THROWING...";
+                
+                // Reset values
+                velocity = { x: 0, y: 0, z: 0 };
+                lastReadingTime = null;
+                throwVelocity = 0;
+                
+                // Clear previous trajectory
+                ctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
+                
+                // Update atmospheric conditions for each throw
+                updateAtmosphericConditions();
+                
+                // Start monitoring motion
+                window.addEventListener('devicemotion', updateVelocity);
+                
+                // Timeout for throw completion (in case no throw is detected)
+                sensorInterval = setInterval(() => {
+                    if (isThrowInProgress) {
+                        // If no throw detected after 3 seconds, simulate one for demo purposes
+                        simulateThrow();
+                    }
+                }, 3000);
+            }
+
+            // Click or touch event for throw button
+            throwButton.addEventListener('click', function() {
+                if (!checkMotionSensors()) return;
+                requestMotionPermission();
+            });
+
+            // Allow clicking on unlocked items to select them
+            unlockItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const unlockDistance = parseInt(item.getAttribute('data-distance'));
+                    if (totalDistance >= unlockDistance) {
+                        // Find matching item in items array
+                        const selectedItem = items.find(i => i.distance === unlockDistance);
+                        if (selectedItem) {
+                            currentItem = selectedItem;
+                            objectDisplay.textContent = currentItem.emoji;
+                            objectName.textContent = currentItem.name;
+                            
+                            // Highlight selected item
+                            unlockItems.forEach(i => i.classList.remove('bg-primary/20', 'dark:bg-primary/30'));
+                            item.classList.add('bg-primary/20', 'dark:bg-primary/30');
+                        }
+                    }
+                });
+            });
+
+            // Initial setup
+            checkMotionSensors();
+        });
+    </script>
+</body>
+</html>
